@@ -1,0 +1,29 @@
+[
+  {
+    "incident_id": "INC-001",
+    "service": "Payment API",
+    "error": "Timeout while connecting to PostgreSQL database",
+    "root_cause": "Database connection pool exhaustion",
+    "resolution": "Increased connection pool size and restarted the API service",
+    "severity": "High",
+    "tags": ["database", "timeout", "postgres"]
+  },
+  {
+    "incident_id": "INC-002",
+    "service": "Auth Service",
+    "error": "Users unable to login due to 401 errors",
+    "root_cause": "Expired JWT signing key after deployment",
+    "resolution": "Rotated JWT keys and redeployed auth service",
+    "severity": "Medium",
+    "tags": ["authentication", "jwt", "deployment"]
+  },
+  {
+    "incident_id": "INC-003",
+    "service": "Order Processing",
+    "error": "Orders stuck in processing state",
+    "root_cause": "Message queue backlog due to consumer crash",
+    "resolution": "Restarted consumers and increased queue retention",
+    "severity": "High",
+    "tags": ["queue", "kafka", "processing"]
+  }
+]
