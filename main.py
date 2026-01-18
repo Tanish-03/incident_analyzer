@@ -1,107 +1,79 @@
-from crewai import Task, Crew
+from semantic_kernel import Kernel
+from semantic_kernel.functions import KernelArguments
 
-from agents.analyzer import incident_analyzer
-from agents.retriever import knowledge_retriever
-from agents.planner import resolution_planner
-from agents.risk_assessor import risk_assessor
+# -------- SKILLS (CrewAI wrapped) ----------
+from skills.incident_skills import IncidentSkills
 
-from skills.knowledge_skills import search_past_incidents
 
-# =========================
-# INCIDENT INPUT
-# =========================
-incident_description = """
-Service: Payment API
-Error: Timeout connecting to PostgreSQL
-Frequency: High
-Last Deployment: 2 hours ago
-"""
+def main():
+    # =========================
+    # INCIDENT INPUT
+    # =========================
+    incident_description = """
+    Service: Payment API
+    Error: Timeout connecting to PostgreSQL
+    Frequency: High
+    Last Deployment: 2 hours ago
+    """
 
-# =========================
-# TASK 1: ANALYZE INCIDENT
-# =========================
-analyze_task = Task(
-    description=(
-        "Analyze the incident and provide:\n"
-        "- Incident category\n"
-        "- Affected service\n"
-        "- Severity (Low/Medium/High)\n"
-        "- One-line summary\n\n"
-        f"Incident:\n{incident_description}"
-    ),
-    expected_output="Structured incident analysis.",
-    agent=incident_analyzer,
-)
+    # =========================
+    # 1️⃣ CREATE SEMANTIC KERNEL
+    # =========================
+    kernel = Kernel()
 
-# =========================
-# TASK 2: RETRIEVE HISTORY
-# =========================
-retrieve_task = Task(
-    description=(
-        "Retrieve the most relevant historical incidents using semantic search.\n\n"
-        f"Incident:\n{incident_description}"
-    ),
-    expected_output="Relevant historical incidents.",
-    agent=knowledge_retriever,
-    tools=[search_past_incidents],
-)
+    # NOTE:
+    # We are NOT using SK for LLM reasoning here.
+    # SK is only orchestrating flow (Confucius role).
+    # CrewAI agents handle LLM execution.
+    
+    # =========================
+    # 2️⃣ REGISTER SKILLS
+    # =========================
+    kernel.import_skill(
+        IncidentSkills(),
+        skill_name="incident"
+    )
 
-# =========================
-# TASK 3: RESOLUTION PLAN
-# =========================
-plan_task = Task(
-    description=(
-        "Using the incident analysis and retrieved incidents, create a resolution plan with:\n"
-        "A) Likely root cause\n"
-        "B) Step-by-step resolution\n"
-        "C) Validation steps\n"
-        "D) Rollback plan\n"
-        "E) Monitoring checklist\n"
-    ),
-    expected_output="Structured resolution plan.",
-    agent=resolution_planner,
-    context=[analyze_task, retrieve_task],
-)
+    # =========================
+    # 3️⃣ ORCHESTRATED FLOW
+    # =========================
 
-# =========================
-# TASK 4: RISK & ESCALATION
-# =========================
-risk_task = Task(
-    description=(
-        "Assess the business risk and escalation needs using:\n"
-        "- Incident analysis\n"
-        "- Resolution plan\n\n"
-        "Provide:\n"
-        "- Final severity level (Sev-1/2/3)\n"
-        "- Business impact\n"
-        "- Escalation recommendation\n"
-        "- Teams to notify"
-    ),
-    expected_output="Risk assessment and escalation decision.",
-    agent=risk_assessor,
-    context=[analyze_task, plan_task],
-)
+    print("\n--- STEP 1: ANALYZE INCIDENT ---\n")
+    analysis = kernel.invoke(
+        "incident.analyze_incident",
+        KernelArguments(incident_description=incident_description),
+    )
 
-# =========================
-# CREW EXECUTION
-# =========================
-crew = Crew(
-    agents=[
-        incident_analyzer,
-        knowledge_retriever,
-        resolution_planner,
-        risk_assessor,
-    ],
-    tasks=[
-        analyze_task,
-        retrieve_task,
-        plan_task,
-        risk_task,
-    ],
-    verbose=True,
-)
+    print("\n--- STEP 2: RETRIEVE HISTORY (RAG) ---\n")
+    history = kernel.invoke(
+        "incident.retrieve_history",
+        KernelArguments(incident_description=incident_description),
+    )
+
+    combined_context = f"""
+    INCIDENT ANALYSIS:
+    {analysis}
+
+    HISTORICAL INCIDENTS:
+    {history}
+    """
+
+    print("\n--- STEP 3: PLAN RESOLUTION ---\n")
+    plan = kernel.invoke(
+        "incident.plan_resolution",
+        KernelArguments(context=combined_context),
+    )
+
+    print("\n--- STEP 4: RISK & ESCALATION ---\n")
+    risk = kernel.invoke(
+        "incident.assess_risk",
+        KernelArguments(context=str(plan)),
+    )
+
+    # =========================
+    print("\n\n===== FINAL INCIDENT REPORT =====\n")
+    print(risk)
+
 
 if __name__ == "__main__":
-    result = crew.kickoff()
-    print("\n\n===== FINAL INCIDENT REPORT =====\n")
-    print(result)
+    main()
